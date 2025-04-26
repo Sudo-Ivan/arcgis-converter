@@ -2,6 +2,9 @@
 
 A web application for converting ArcGIS public layers to various formats for offline use in applications like ATAK, QGIS, and other GIS programs.
 
+> [!NOTE]  
+> All data processing and conversion is handled entirely client-side via JavaScript in your browser. No data is sent to or stored on any server. This ensures your data privacy and allows for offline operation once the application is loaded.
+
 ## Features
 
 - Convert ArcGIS layers to multiple formats:
