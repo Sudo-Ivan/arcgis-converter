@@ -130,16 +130,17 @@
             <div class="url-info">
                 <h3>URL Parameters</h3>
                 <div class="hint-box">
-                    <p>You can use URL parameters to pre-load layers and optionally export them:</p>
-                    <code>?url=LAYER_URL</code> - Load a single layer<br>
-                    <code>?url=FEATURE_SERVER_URL</code> - Load a Feature Server and show layer selection<br>
-                    <code>?urls=LAYER_URL1,LAYER_URL2</code> - Load multiple specific layers<br>
+                    <p>You can use the URL hash (#) to pre-load a layer and query parameters (?) to optionally export it:</p>
+                    <code>#LAYER_URL</code> - Load a single layer by adding its URL after the #<br>
                     <code>?export=FORMAT</code> - Export in specified format (kml, geojson, gpx)
-                    
-                    <p>Note: The URLs must be properly encoded. For example:</p>
-                    <pre><code>https://arcgis-converter.vercel.app/?url=https%3A%2F%2Fexample.com%2Farcgis%2Frest%2Fservices%2FExampleLayer%2FFeatureServer</code></pre>
-                    <pre><code>https://arcgis-converter.vercel.app/?urls=https%3A%2F%2Fexample.com%2Farcgis%2Frest%2Fservices%2FLayer1%2FFeatureServer%2F0%2Chttps%3A%2F%2Fexample.com%2Farcgis%2Frest%2Fservices%2FLayer2%2FFeatureServer%2F1</code></pre>
-                </div>
+
+                    <p>Combine them like: <code>...app.html?export=kml#LAYER_URL</code></p>
+
+                    <p>Examples:</p>
+                    <pre><code>https://arcgis-converter.vercel.app/#https://services.arcgis.com/your-org/arcgis/rest/services/ExampleLayer/FeatureServer/0</code></pre>
+                    <pre><code>https://arcgis-converter.vercel.app/?export=kml#https://www.arcgis.com/home/item.html?id=your-item-id</code></pre>
+                    <p>Note: If the URL after # doesn't start with http:// or https://, the app will assume https://.</p>
+                 </div>
             </div>
             <div class="footer-info">
                 <p>Created by Sudo-Ivan, MIT Licensed. <a href="https://github.com/Sudo-Ivan/arcgis-converter" target="_blank">View Source Code</a></p>

@@ -69,17 +69,28 @@ https://www.arcgis.com/home/item.html?id=[item_id]
 ```
 
 ### URL Parameters
+
 The application supports URL parameters for pre-loading layers and exporting:
 
-- `?url=LAYER_URL` - Load a single layer
-- `?url=FEATURE_SERVER_URL` - Load a Feature Server and show layer selection
-- `?urls=LAYER_URL1,LAYER_URL2` - Load multiple specific layers
-- `?export=FORMAT` - Export in specified format (kml, geojson, gpx)
+-   `#LAYER_URL` - Load a single layer by appending its URL after the `#`. The app will attempt to add `https://` if the protocol is missing.
+-   `?export=FORMAT` - Add this query parameter to automatically export in the specified format (`kml`, `geojson`, `gpx`) after the layer loads.
 
-Example with URL encoding:
-```
-https://your-domain.com/?url=https%3A%2F%2Fservices.arcgis.com%2Fyour-org%2Farcgis%2Frest%2Fservices%2FExampleLayer%2FFeatureServer%2F0
-```
+Example Usage:
+
+-   Load a specific layer:
+    ```
+    https://your-domain.com/#https://services.arcgis.com/your-org/arcgis/rest/services/ExampleLayer/FeatureServer/0
+    ```
+-   Load an ArcGIS Online Item:
+    ```
+    https://your-domain.com/#https://www.arcgis.com/home/item.html?id=your-item-id
+    ```
+-   Load a layer and automatically export to KML:
+    ```
+    https://your-domain.com/?export=kml#https://services.arcgis.com/your-org/arcgis/rest/services/ExampleLayer/FeatureServer/0
+    ```
+
+**Note:** Using the `#` method should allow pasting most ArcGIS URLs directly without needing manual URL encoding, although complex URLs might still pose issues.
 
 ## License
 

@@ -206,6 +206,12 @@ class ArcGISConverterApp {
             filter.addEventListener('change', () => this.filterLayers());
         });
         
+        // Add listener for hash changes
+        window.addEventListener('hashchange', () => {
+            console.log('Hash changed, re-evaluating URL parameters...');
+            this.handleUrlParameters();
+        });
+
         window.addEventListener('click', (event) => {
             if (event.target === this.layerSelectionModal) {
                 this.closeLayerSelectionModal();
@@ -1192,36 +1198,66 @@ class ArcGISConverterApp {
     }
 
     handleUrlParameters() {
+        const hash = window.location.hash.substring(1); // Remove leading '#'
         const urlParams = new URLSearchParams(window.location.search);
-        const singleUrl = urlParams.get('url');
-        const multipleUrls = urlParams.get('urls');
         const exportFormat = urlParams.get('export');
+        let layerUrl = null;
 
-        if (singleUrl) {
-            this.layerUrlInput.value = decodeURIComponent(singleUrl);
+        if (hash && hash.length > 5 && (hash.includes('.') || hash.includes('/'))) { // Basic check if hash looks like a URL part
+            if (hash.startsWith('http://') || hash.startsWith('https://')) {
+                layerUrl = hash;
+            } else {
+                // Assume https if protocol is missing
+                layerUrl = `https://${hash}`;
+            }
+            console.log(`Attempting to load URL from hash: ${layerUrl}`);
+            this.layerUrlInput.value = layerUrl;
             this.handleFetchLayer();
 
             if (exportFormat) {
-                // Wait for layer(s) to load before setting export format
-                const checkExportFormat = setInterval(() => {
-                    if (this.vectorLayers.size > 0) {
-                        clearInterval(checkExportFormat);
-                        const formatCheckbox = this.exportControlsDiv.querySelector(`input[value="${exportFormat.toLowerCase()}"]`);
-                        if (formatCheckbox) {
-                            formatCheckbox.checked = true;
-                            this.handleExport();
-                        }
-                    }
-                }, 100);
+                this.waitForLayerAndExport(exportFormat);
             }
-        } else if (multipleUrls) {
-            // Handle multiple layer URLs
-            const urls = decodeURIComponent(multipleUrls).split(',');
-            this.loadMultipleLayers(urls, exportFormat);
+        } else {
+             // Fallback to query parameter 'url' if hash is not usable
+             const singleUrlParam = urlParams.get('url');
+             if (singleUrlParam) {
+                 layerUrl = decodeURIComponent(singleUrlParam);
+                 console.log(`Attempting to load URL from query parameter: ${layerUrl}`);
+                 this.layerUrlInput.value = layerUrl;
+                 this.handleFetchLayer();
+
+                 if (exportFormat) {
+                     this.waitForLayerAndExport(exportFormat);
+                 }
+            }
+             // Removed the 'urls' parameter logic for simplicity with hash introduction
         }
     }
 
+    waitForLayerAndExport(exportFormat) {
+        const checkExportFormat = setInterval(() => {
+            if (!this.isLoading && this.vectorLayers.size > 0) { // Check if loading is finished
+                clearInterval(checkExportFormat);
+                const formatCheckbox = this.exportControlsDiv.querySelector(`input[value="${exportFormat.toLowerCase()}"]`);
+                if (formatCheckbox) {
+                    formatCheckbox.checked = true;
+                    console.log(`Auto-exporting to ${exportFormat}...`);
+                    this.handleExport();
+                } else {
+                    this.setStatus(`Invalid export format specified in URL: ${exportFormat}`, 'warning');
+                }
+            }
+        }, 200); // Check every 200ms
+
+        // Add a timeout to prevent infinite loops if something goes wrong
+        setTimeout(() => {
+            clearInterval(checkExportFormat);
+        }, 30000); // Timeout after 30 seconds
+    }
+
     async loadMultipleLayers(urls, exportFormat) {
+        // This function might need adjustment or removal if we solely rely on hash for single URL
+        // For now, it's not called by the updated handleUrlParameters
         this.setLoading(true);
         this.setStatus(`Loading ${urls.length} layer(s)...`, 'info');
 
