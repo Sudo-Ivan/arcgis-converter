@@ -200,6 +200,7 @@ class ArcGISConverterApp {
         }
 
         this.setLoading(true);
+        this.showLoadingIndicator();
         this.setStatus('Fetching layer information...', 'info');
 
         try {
@@ -219,7 +220,16 @@ class ArcGISConverterApp {
             console.error('Detailed Error:', error);
         } finally {
             this.setLoading(false);
+            this.hideLoadingIndicator();
         }
+    }
+
+    showLoadingIndicator() {
+        document.querySelector('.loading-indicator').classList.add('active');
+    }
+
+    hideLoadingIndicator() {
+        document.querySelector('.loading-indicator').classList.remove('active');
     }
 
     async handleArcGISOnlineItem(url) {
@@ -240,6 +250,7 @@ class ArcGISConverterApp {
             throw new Error(`Item Error: ${itemData.error.message}`);
         }
 
+        // Store the current item
         this.currentItem = {
             id: itemId,
             name: itemData.name,
@@ -247,15 +258,31 @@ class ArcGISConverterApp {
             url: itemData.url
         };
 
+        // Handle different item types
         switch (itemData.type) {
+            case 'Feature Service':
+                if (itemData.url) {
+                    if (itemData.url.endsWith('/FeatureServer')) {
+                        await this.handleFeatureServerUrl(itemData.url);
+                    } else {
+                        await this.handleSingleLayerUrl(itemData.url);
+                    }
+                } else {
+                    throw new Error('Feature Service item does not have a service URL.');
+                }
+                break;
             case 'Map Service':
-                await this.handleMapService(itemData);
+                if (itemData.url) {
+                    await this.handleMapService(itemData);
+                } else {
+                    throw new Error('Map Service item does not have a service URL.');
+                }
                 break;
             case 'Web Map':
                 await this.handleWebMap(itemData);
                 break;
             default:
-                throw new Error(`Unsupported item type: ${itemData.type}. Currently supporting Map Services and Web Maps.`);
+                throw new Error(`Unsupported item type: ${itemData.type}. Currently supporting Feature Services, Map Services, and Web Maps.`);
         }
     }
 
@@ -492,8 +519,12 @@ class ArcGISConverterApp {
 
             const header = groupElement.querySelector('.layer-group-header');
             const content = groupElement.querySelector('.layer-group-content');
+            
+            // Add click handler for expanding/collapsing
             header.addEventListener('click', () => {
                 content.classList.toggle('expanded');
+                // Update the header's appearance based on expanded state
+                header.style.borderBottom = content.classList.contains('expanded') ? '1px solid var(--border-color)' : 'none';
             });
 
             this.layerSelectionList.appendChild(groupElement);
