@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   web:
-    build: .
+    image: ghcr.io/sudo-ivan/arcgis-converter:latest
     ports:
       - "8000:80"
     volumes:

@@ -31,15 +31,15 @@ npm install -g serve
 serve -p 8000
 ```
 
-### Option 3: Using Docker
-For production deployment, you can use Docker:
+### Docker
 
-1. Build and run using Docker Compose:
 ```bash
-docker-compose up -d
+docker pull ghcr.io/sudo-ivan/arcgis-converter:latest
+docker run -p 8000:80 ghcr.io/sudo-ivan/arcgis-converter:latest
 ```
 
-2. Or build and run using Docker directly:
+#### Manual Docker Build
+
 ```bash
 docker build -t arcgis-converter .
 docker run -p 8000:80 arcgis-converter
