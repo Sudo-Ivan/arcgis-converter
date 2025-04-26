@@ -29,15 +29,3 @@ jobs:
           severity: critical,high
           path: .
           exit-code: 0
-          
-      - name: Validate SARIF file
-        run: |
-          if [ ! -s bearer.sarif ]; then
-            echo "{}" > bearer.sarif
-            echo '{"version": "2.1.0", "runs": [{"results": []}]}' > bearer.sarif
-          fi
-          
-      - name: Upload SARIF results
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: bearer.sarif

@@ -18,6 +18,33 @@ A web application for converting ArcGIS public layers to various formats for off
 - Layer selection
 - Support for ArcGIS Online items (extract all layers from web maps)
 
+## Running the Application
+
+1. Using Python:
+```bash
+python -m http.server 8000
+```
+
+2. Using Node.js:
+```bash
+npm install -g serve
+serve -p 8000
+```
+
+### Option 3: Using Docker
+For production deployment, you can use Docker:
+
+1. Build and run using Docker Compose:
+```bash
+docker-compose up -d
+```
+
+2. Or build and run using Docker directly:
+```bash
+docker build -t arcgis-converter .
+docker run -p 8000:80 arcgis-converter
+```
+
 ## URL Examples
 
 ### Feature Server URLs
