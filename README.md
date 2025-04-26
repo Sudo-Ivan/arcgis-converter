@@ -10,12 +10,13 @@ A web application for converting ArcGIS layers to various formats for offline us
   - GPX (GPS Exchange Format)
   - Shapefile (coming soon)
 - Preview layer data on an interactive map
+- PWA Ready
 - Export multiple formats simultaneously
 - Modern, responsive user interface
 - URL encoding
 - Shareable URLs
 - Layer selection
-- Support for ArcGIS Online item URLs
+- Support for ArcGIS Online items (extract all layers from web maps)
 
 ## URL Examples
 
