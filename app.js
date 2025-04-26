@@ -46,6 +46,18 @@ class ArcGISConverterApp {
         this.addEventListeners();
         this.handleUrlParameters();
         this.setStatus('Ready. Enter an ArcGIS Feature Layer URL.', 'info');
+        this.registerServiceWorker();
+    }
+
+    async registerServiceWorker() {
+        if ('serviceWorker' in navigator) {
+            try {
+                const registration = await navigator.serviceWorker.register('/sw.js');
+                console.log('ServiceWorker registration successful with scope: ', registration.scope);
+            } catch (error) {
+                console.error('ServiceWorker registration failed: ', error);
+            }
+        }
     }
 
     initMap() {

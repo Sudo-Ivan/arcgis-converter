@@ -1,0 +1,17 @@
+{
+    "name": "ArcGIS Layer Converter",
+    "short_name": "ArcGIS Converter",
+    "description": "Convert ArcGIS Feature Layers to various formats for offline use",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#f5f6fa",
+    "theme_color": "#2C3E50",
+    "icons": [
+        {
+            "src": "icon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any"
+        }
+    ]
+} 
