@@ -1,6 +1,6 @@
 # ArcGIS Layer Converter
 
-A web application for converting ArcGIS layers to various formats for offline use in applications like ATAK, QGIS, and other GIS programs.
+A web application for converting ArcGIS public layers to various formats for offline use in applications like ATAK, QGIS, and other GIS programs.
 
 ## Features
 
