@@ -5,6 +5,8 @@ A web application for converting ArcGIS public layers to various formats for off
 > [!NOTE]  
 > All data processing and conversion is handled entirely client-side via JavaScript in your browser. No data is sent to or stored on any server. This ensures your data privacy and allows for offline operation once the application is loaded.
 
+Check out the CLI tool: [arcgis-utils](https://github.com/Sudo-Ivan/arcgis-utils)
+
 ## Features
 
 - Convert ArcGIS layers to multiple formats:
