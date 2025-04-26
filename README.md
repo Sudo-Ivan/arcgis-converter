@@ -21,6 +21,13 @@ A web application for converting ArcGIS public layers to various formats for off
 - Layer selection
 - Support for ArcGIS Online items (extract all layers from web maps)
 
+## To-Do
+
+- Retain ArcGIS Images and Symbology
+- Shapefile and CSV Export
+- Download specific or all layers
+- Better Metadata info/viewer
+
 ## Running the Application
 
 ```
