@@ -8,8 +8,8 @@ const ASSETS_TO_CACHE = [
     '/manifest.json',
     '/vendor/openlayers/ol.css',
     '/vendor/openlayers/ol-layerswitcher.css',
-    'https://cdn.jsdelivr.net/npm/ol@v9.2.4/dist/ol.js',
-    'https://cdn.jsdelivr.net/npm/ol-layerswitcher@4.1.1/dist/ol-layerswitcher.js'
+    'https://cdn.jsdelivr.net/npm/ol@v10.5.0/dist/ol.js',
+    'https://cdn.jsdelivr.net/npm/ol-layerswitcher@4.1.2/dist/ol-layerswitcher.js'
 ];
 
 // Install event - cache assets
