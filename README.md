@@ -23,6 +23,11 @@ A web application for converting ArcGIS public layers to various formats for off
 
 ## Running the Application
 
+```
+git clone https://github.com/Sudo-Ivan/arcgis-converter.git
+cd arcgis-converter
+```
+
 1. Directly in Browser:
     Open the `index.html` file directly in your web browser (make sure the app.js and other files are in the same directory).
 
