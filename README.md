@@ -27,6 +27,7 @@ A web application for converting ArcGIS public layers to various formats for off
 - Shapefile and CSV Export
 - Download specific or all layers
 - Better Metadata info/viewer
+- Add support for ArcGIS Server 10.x and 100.x
 
 ## Running the Application
 
