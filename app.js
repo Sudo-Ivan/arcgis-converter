@@ -39,6 +39,13 @@ class ArcGISConverterApp {
         this.availableLayers = [];
         this.currentItem = null;
         this.layerGroups = new Map();
+        
+        // Add performance-related properties
+        this.worker = null;
+        this.requestQueue = new Map();
+        this.batchSize = 5; // Number of concurrent requests
+        this.memoryCache = new Map();
+        this.memoryCacheLimit = 100; // Maximum number of items to cache
     }
 
     init() {
@@ -47,6 +54,24 @@ class ArcGISConverterApp {
         this.handleUrlParameters();
         this.setStatus('Ready. Enter an ArcGIS Feature Layer URL.', 'info');
         this.registerServiceWorker();
+        this.initWorker();
+    }
+
+    initWorker() {
+        if (window.Worker) {
+            this.worker = new Worker('worker.js');
+            this.worker.onmessage = (e) => {
+                const { type, data } = e.data;
+                switch (type) {
+                    case 'featureProcessing':
+                        this.handleProcessedFeatures(data);
+                        break;
+                    case 'error':
+                        this.setStatus(`Worker Error: ${data}`, 'error');
+                        break;
+                }
+            };
+        }
     }
 
     async registerServiceWorker() {
@@ -204,8 +229,49 @@ class ArcGISConverterApp {
         }
     }
 
+    isValidHttpUrl(string) {
+        let url;
+        try {
+            url = new URL(string);
+        } catch (_) {
+            return false;
+        }
+        return url.protocol === "http:" || url.protocol === "https:"
+    }
+
+    normalizeArcGISUrl(url) {
+        // Convert to lowercase for case-insensitive comparison
+        const lowerUrl = url.toLowerCase();
+        
+        // Check if it's an ArcGIS URL
+        if (lowerUrl.includes('arcgis.com') || lowerUrl.includes('arcgis/rest')) {
+            // Normalize the URL structure
+            const urlObj = new URL(url);
+            const pathParts = urlObj.pathname.split('/').filter(Boolean);
+            
+            // Find the index of 'arcgis' or 'rest' in the path
+            const arcgisIndex = pathParts.findIndex(part => 
+                part.toLowerCase() === 'arcgis' || part.toLowerCase() === 'rest'
+            );
+            
+            if (arcgisIndex !== -1) {
+                // Reconstruct the path with proper casing
+                const normalizedPath = pathParts.map((part, index) => {
+                    if (index === arcgisIndex) return 'ArcGIS';
+                    if (index === arcgisIndex + 1) return 'rest';
+                    return part;
+                }).join('/');
+                
+                urlObj.pathname = '/' + normalizedPath;
+                return urlObj.toString();
+            }
+        }
+        
+        return url;
+    }
+
     async handleFetchLayer() {
-        const url = this.layerUrlInput.value.trim();
+        const url = this.normalizeArcGISUrl(this.layerUrlInput.value.trim());
         if (!this.isValidHttpUrl(url)) {
             this.setStatus('Please enter a valid URL.', 'error');
             return;
@@ -218,8 +284,8 @@ class ArcGISConverterApp {
         try {
             if (url.includes('arcgis.com/home/item.html')) {
                 await this.handleArcGISOnlineItem(url);
-            } else if (url.includes('/FeatureServer')) {
-                if (url.endsWith('/FeatureServer')) {
+            } else if (url.toLowerCase().includes('/featureserver')) {
+                if (url.toLowerCase().endsWith('/featureserver')) {
                     await this.handleFeatureServerUrl(url);
                 } else {
                     await this.handleSingleLayerUrl(url);
@@ -620,6 +686,18 @@ class ArcGISConverterApp {
         const metadata = await response.json();
         if (metadata.error) {
             throw new Error(`Feature Server Error: ${metadata.error.message}`);
+        }
+
+        // Check if there are layers in the metadata
+        if (!metadata.layers || metadata.layers.length === 0) {
+            throw new Error('No layers found in the Feature Server.');
+        }
+
+        // If there's only one layer, automatically select it
+        if (metadata.layers.length === 1) {
+            const layer = metadata.layers[0];
+            await this.handleSingleLayerUrl(`${url}/${layer.id}`);
+            return;
         }
 
         this.currentFeatureServer = {
@@ -1099,16 +1177,6 @@ class ArcGISConverterApp {
         URL.revokeObjectURL(url);
     }
 
-    isValidHttpUrl(string) {
-        let url;
-        try {
-            url = new URL(string);
-        } catch (_) {
-            return false;
-        }
-        return url.protocol === "http:" || url.protocol === "https:"
-    }
-
     escapeXml(unsafe) {
         if (unsafe === null || unsafe === undefined) return '';
         return String(unsafe).replace(/[<>&'"/]/g, function (c) {
@@ -1213,5 +1281,115 @@ class ArcGISConverterApp {
         }).catch(() => {
             this.setStatus('Failed to copy URL to clipboard.', 'error');
         });
+    }
+
+    async batchFetch(urls, options = {}) {
+        const results = new Map();
+        const chunks = this.chunkArray(urls, this.batchSize);
+
+        for (const chunk of chunks) {
+            const promises = chunk.map(url => this.fetchWithCache(url, options));
+            const chunkResults = await Promise.all(promises);
+            
+            chunkResults.forEach((result, index) => {
+                results.set(chunk[index], result);
+            });
+        }
+
+        return results;
+    }
+
+    async fetchWithCache(url, options = {}) {
+        // Check memory cache first
+        if (this.memoryCache.has(url)) {
+            return this.memoryCache.get(url);
+        }
+
+        // Check service worker cache
+        const cachedResponse = await caches.match(url);
+        if (cachedResponse) {
+            const data = await cachedResponse.json();
+            this.updateMemoryCache(url, data);
+            return data;
+        }
+
+        // Fetch from network
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        this.updateMemoryCache(url, data);
+        return data;
+    }
+
+    updateMemoryCache(url, data) {
+        // Implement LRU cache
+        if (this.memoryCache.size >= this.memoryCacheLimit) {
+            const firstKey = this.memoryCache.keys().next().value;
+            this.memoryCache.delete(firstKey);
+        }
+        this.memoryCache.set(url, data);
+    }
+
+    chunkArray(array, size) {
+        const chunks = [];
+        for (let i = 0; i < array.length; i += size) {
+            chunks.push(array.slice(i, i + size));
+        }
+        return chunks;
+    }
+
+    async processFeatures(features) {
+        if (this.worker) {
+            // Offload processing to Web Worker
+            this.worker.postMessage({
+                type: 'processFeatures',
+                data: features
+            });
+        } else {
+            // Fallback to main thread processing
+            return this.processFeaturesInMainThread(features);
+        }
+    }
+
+    processFeaturesInMainThread(features) {
+        return features.map(feature => {
+            // Existing feature processing logic
+            let geometry = null;
+            if (feature.geometry) {
+                if (feature.geometry.x !== undefined && feature.geometry.y !== undefined) {
+                    geometry = new ol.Feature({
+                        geometry: new ol.geom.Point(ol.proj.fromLonLat([feature.geometry.x, feature.geometry.y])),
+                        ...feature.attributes
+                    });
+                } else if (feature.geometry.paths) {
+                    const coordinates = feature.geometry.paths[0].map(coord => ol.proj.fromLonLat(coord));
+                    geometry = new ol.Feature({
+                        geometry: new ol.geom.LineString(coordinates),
+                        ...feature.attributes
+                    });
+                } else if (feature.geometry.rings) {
+                    const coordinates = feature.geometry.rings.map(ring => 
+                        ring.map(coord => ol.proj.fromLonLat(coord))
+                    );
+                    geometry = new ol.Feature({
+                        geometry: new ol.geom.Polygon(coordinates),
+                        ...feature.attributes
+                    });
+                }
+            }
+            return geometry;
+        }).filter(f => f !== null);
+    }
+
+    handleProcessedFeatures(features) {
+        // Handle features processed by Web Worker
+        const vectorSource = new ol.source.Vector();
+        vectorSource.addFeatures(features);
+        
+        // Update map and UI
+        this.displayFeaturesOnMap(vectorSource);
     }
 } 
