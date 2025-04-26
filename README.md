@@ -20,12 +20,15 @@ A web application for converting ArcGIS public layers to various formats for off
 
 ## Running the Application
 
-1. Using Python:
+1. Directly in Browser:
+    Open the `index.html` file directly in your web browser (make sure the app.js and other files are in the same directory).
+
+2. Using Python:
 ```bash
 python -m http.server 8000
 ```
 
-2. Using Node.js:
+3. Using Node.js:
 ```bash
 npm install -g serve
 serve -p 8000
