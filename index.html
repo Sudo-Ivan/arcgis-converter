@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArcGIS Layer Converter</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v9.2.4/ol.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol-layerswitcher@4.1.1/dist/ol-layerswitcher.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>ArcGIS Layer Converter</h1>
+            <p>Convert ArcGIS Feature Layers to various formats for offline use.</p>
+        </header>
+
+        <main>
+            <section class="input-section card">
+                <h2>Input Layer</h2>
+                <div class="input-group">
+                    <label for="layerUrl">ArcGIS Feature Layer URL:</label>
+                    <input type="url" id="layerUrl" placeholder="e.g., .../FeatureServer or .../FeatureServer/0" required>
+                    <small>Enter either a Feature Server URL or a specific layer URL ending with the layer index (e.g., /0, /1).</small>
+                </div>
+                <div class="button-group">
+                    <button id="fetchLayerBtn" class="primary-button">Add Layer</button>
+                    <button id="shareBtn" class="secondary-button" title="Copy shareable URL">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+                            <polyline points="16 6 12 2 8 6"></polyline>
+                            <line x1="12" y1="2" x2="12" y2="15"></line>
+                        </svg>
+                        Share
+                    </button>
+                </div>
+                <div id="layerList" class="layer-list">
+                </div>
+                <div id="layerMetadata" class="layer-metadata"></div>
+            </section>
+
+            <div id="layerSelectionModal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h3>Select Layers</h3>
+                        <button class="close-modal">&times;</button>
+                    </div>
+                    <div class="modal-body">
+                        <div id="layerSelectionList" class="layer-selection-list">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button id="selectAllLayers" class="secondary-button">Select All</button>
+                        <button id="deselectAllLayers" class="secondary-button">Deselect All</button>
+                        <button id="addSelectedLayers" class="primary-button">Add Selected Layers</button>
+                    </div>
+                </div>
+            </div>
+
+            <section class="output-section card">
+                <h2>Export Options</h2>
+                <div id="exportControls" class="export-controls hidden">
+                    <div class="format-options">
+                        <label><input type="checkbox" name="format" value="geojson" checked> GeoJSON</label>
+                        <label><input type="checkbox" name="format" value="kml"> KML</label>
+                        <label><input type="checkbox" name="format" value="gpx"> GPX</label>
+                        <label><input type="checkbox" name="format" value="shapefile" disabled> Shapefile (Soon)</label>
+                    </div>
+                    <button id="exportBtn" class="primary-button">Export Selected</button>
+                </div>
+                 <p id="exportPlaceholder">Load a layer to see export options.</p>
+            </section>
+
+            <section class="preview-section card">
+                 <h2>Layer Preview</h2>
+                 <div id="map" class="map-container">
+                     <div id="mapPlaceholder">Load a layer to see the preview.</div>
+                     <div id="mouse-position"></div>
+                 </div>
+                 <div id="popup" class="ol-popup">
+                     <a href="#" id="popup-closer" class="ol-popup-closer"></a>
+                     <div id="popup-content"></div>
+                 </div>
+            </section>
+        </main>
+
+        <footer>
+            <p>Supports formats compatible with ATAK, QGIS, Google Earth, and more.</p>
+            <p id="statusMessage" class="status-message"></p>
+            <div class="url-info">
+                <h3>URL Parameters</h3>
+                <div class="hint-box">
+                    <p>You can use URL parameters to pre-load layers and optionally export them:</p>
+                    <code>?url=LAYER_URL</code> - Load a single layer<br>
+                    <code>?url=FEATURE_SERVER_URL</code> - Load a Feature Server and show layer selection<br>
+                    <code>?urls=LAYER_URL1,LAYER_URL2</code> - Load multiple specific layers<br>
+                    <code>?export=FORMAT</code> - Export in specified format (kml, geojson, gpx)
+                    
+                    <p>Note: The URLs must be properly encoded. For example:</p>
+                    <pre><code>http://localhost:8099/?url=https%3A%2F%2Fexample.com%2Farcgis%2Frest%2Fservices%2FExampleLayer%2FFeatureServer</code></pre>
+                    <pre><code>http://localhost:8099/?urls=https%3A%2F%2Fexample.com%2Farcgis%2Frest%2Fservices%2FLayer1%2FFeatureServer%2F0%2Chttps%3A%2F%2Fexample.com%2Farcgis%2Frest%2Fservices%2FLayer2%2FFeatureServer%2F1</code></pre>
+
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/ol@v9.2.4/dist/ol.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ol-layerswitcher@4.1.1/dist/ol-layerswitcher.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
