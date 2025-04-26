@@ -25,15 +25,20 @@ class ArcGISConverterApp {
         this.addSelectedLayers = document.getElementById('addSelectedLayers');
         this.closeModal = document.querySelector('.close-modal');
         this.shareBtn = document.getElementById('shareBtn');
-
+        this.layerSearch = document.getElementById('layerSearch');
+        this.layerTypeFilters = document.querySelectorAll('.layer-type-filters input[type="checkbox"]');
+        this.layerCount = document.querySelector('.layer-count');
+        
         this.map = null;
-        this.vectorLayers = new Map(); // Map to store vector layers
-        this.layerMetadata = new Map(); // Map to store layer metadata
-        this.layerFeatures = new Map(); // Map to store layer features
-        this.drawingInfo = new Map(); // Map to store drawing info
+        this.vectorLayers = new Map();
+        this.layerMetadata = new Map();
+        this.layerFeatures = new Map();
+        this.drawingInfo = new Map();
         this.overlay = null;
         this.currentFeatureServer = null;
         this.availableLayers = [];
+        this.currentItem = null;
+        this.layerGroups = new Map();
     }
 
     init() {
@@ -46,7 +51,6 @@ class ArcGISConverterApp {
     initMap() {
         if (this.map) return;
 
-        // Create base layers
         const osmLayer = new ol.layer.Tile({
             source: new ol.source.OSM(),
             visible: true,
@@ -89,7 +93,6 @@ class ArcGISConverterApp {
             title: 'Light'
         });
 
-        // Create map
         this.map = new ol.Map({
             target: this.mapContainer,
             layers: [osmLayer, satelliteLayer, terrainLayer, darkLayer, lightLayer],
@@ -119,7 +122,6 @@ class ArcGISConverterApp {
             ]
         });
 
-        // Create popup overlay
         this.overlay = new ol.Overlay({
             element: this.popup,
             autoPan: true,
@@ -129,21 +131,18 @@ class ArcGISConverterApp {
         });
         this.map.addOverlay(this.overlay);
 
-        // Handle popup closer
         this.popupCloser.onclick = () => {
             this.overlay.setPosition(undefined);
             this.popupCloser.blur();
             return false;
         };
 
-        // Handle map clicks
         this.map.on('click', (evt) => {
             const feature = this.map.forEachFeatureAtPixel(evt.pixel, (feature) => feature);
             if (feature) {
                 const coordinates = feature.getGeometry().getCoordinates();
                 const properties = feature.getProperties();
                 
-                // Create popup content
                 const content = Object.entries(properties)
                     .filter(([key]) => key !== 'geometry')
                     .map(([key, value]) => `<strong>${key}:</strong> ${value}`)
@@ -154,7 +153,6 @@ class ArcGISConverterApp {
             }
         });
 
-        // Hide placeholder
         this.mapPlaceholder.classList.add('hidden');
     }
 
@@ -166,8 +164,11 @@ class ArcGISConverterApp {
         this.addSelectedLayers.addEventListener('click', () => this.handleAddSelectedLayers());
         this.closeModal.addEventListener('click', () => this.closeLayerSelectionModal());
         this.shareBtn.addEventListener('click', () => this.copyShareableUrl());
+        this.layerSearch.addEventListener('input', () => this.filterLayers());
+        this.layerTypeFilters.forEach(filter => {
+            filter.addEventListener('change', () => this.filterLayers());
+        });
         
-        // Close modal when clicking outside
         window.addEventListener('click', (event) => {
             if (event.target === this.layerSelectionModal) {
                 this.closeLayerSelectionModal();
@@ -193,8 +194,8 @@ class ArcGISConverterApp {
 
     async handleFetchLayer() {
         const url = this.layerUrlInput.value.trim();
-        if (!this.isValidHttpUrl(url) || !url.includes('/FeatureServer')) {
-            this.setStatus('Please enter a valid ArcGIS Feature Server URL.', 'error');
+        if (!this.isValidHttpUrl(url)) {
+            this.setStatus('Please enter a valid URL.', 'error');
             return;
         }
 
@@ -202,11 +203,16 @@ class ArcGISConverterApp {
         this.setStatus('Fetching layer information...', 'info');
 
         try {
-            // Check if it's a Feature Server URL or a specific layer URL
-            if (url.endsWith('/FeatureServer')) {
-                await this.handleFeatureServerUrl(url);
+            if (url.includes('arcgis.com/home/item.html')) {
+                await this.handleArcGISOnlineItem(url);
+            } else if (url.includes('/FeatureServer')) {
+                if (url.endsWith('/FeatureServer')) {
+                    await this.handleFeatureServerUrl(url);
+                } else {
+                    await this.handleSingleLayerUrl(url);
+                }
             } else {
-                await this.handleSingleLayerUrl(url);
+                throw new Error('Unsupported URL format. Please enter an ArcGIS Online item URL or Feature Server URL.');
             }
         } catch (error) {
             this.setStatus(`Error: ${error.message}`, 'error');
@@ -216,8 +222,350 @@ class ArcGISConverterApp {
         }
     }
 
+    async handleArcGISOnlineItem(url) {
+        const itemId = url.match(/id=([^&]+)/)?.[1];
+        if (!itemId) {
+            throw new Error('Invalid ArcGIS Online item URL. Could not extract item ID.');
+        }
+
+        const itemUrl = `https://www.arcgis.com/sharing/rest/content/items/${itemId}?f=json`;
+        const response = await fetch(itemUrl);
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch item metadata: ${response.statusText}`);
+        }
+
+        const itemData = await response.json();
+        if (itemData.error) {
+            throw new Error(`Item Error: ${itemData.error.message}`);
+        }
+
+        this.currentItem = {
+            id: itemId,
+            name: itemData.name,
+            type: itemData.type,
+            url: itemData.url
+        };
+
+        switch (itemData.type) {
+            case 'Map Service':
+                await this.handleMapService(itemData);
+                break;
+            case 'Web Map':
+                await this.handleWebMap(itemData);
+                break;
+            default:
+                throw new Error(`Unsupported item type: ${itemData.type}. Currently supporting Map Services and Web Maps.`);
+        }
+    }
+
+    async handleMapService(itemData) {
+        const layersUrl = `${itemData.url}?f=json`;
+        const layersResponse = await fetch(layersUrl);
+        
+        if (!layersResponse.ok) {
+            throw new Error(`Failed to fetch layers: ${layersResponse.statusText}`);
+        }
+
+        const layersData = await layersResponse.json();
+        if (layersData.error) {
+            throw new Error(`Layers Error: ${layersData.error.message}`);
+        }
+
+        this.groupLayers(layersData.layers || []);
+        this.showLayerSelectionModal();
+    }
+
+    async handleWebMap(itemData) {
+        const webMapUrl = `https://www.arcgis.com/sharing/rest/content/items/${itemData.id}/data?f=json`;
+        console.log('Fetching Web Map data from:', webMapUrl);
+        
+        const webMapResponse = await fetch(webMapUrl);
+        
+        if (!webMapResponse.ok) {
+            throw new Error(`Failed to fetch Web Map data: ${webMapResponse.statusText}`);
+        }
+
+        const webMapData = await webMapResponse.json();
+        console.log('Web Map data:', webMapData);
+        
+        if (webMapData.error) {
+            throw new Error(`Web Map Error: ${webMapData.error.message}`);
+        }
+
+        const layers = [];
+        if (webMapData.operationalLayers) {
+            console.log('Found operational layers:', webMapData.operationalLayers);
+            
+            for (const layer of webMapData.operationalLayers) {
+                console.log('Processing layer:', layer);
+                await this.processLayer(layer, layers, []);
+            }
+        }
+
+        console.log('Final layers array:', layers);
+
+        this.groupLayers(layers);
+        this.showLayerSelectionModal();
+    }
+
+    async processLayer(layer, layers, parentPath = []) {
+        const currentPath = [...parentPath, layer.title];
+        console.log('Processing layer path:', currentPath.join(' > '));
+
+        if (layer.layers) {
+            console.log('Found group layer:', layer.title);
+            for (const subLayer of layer.layers) {
+                await this.processLayer(subLayer, layers, currentPath);
+            }
+        } else if (layer.url) {
+            const layerUrl = layer.url;
+            console.log('Fetching service:', layerUrl);
+            
+            const layerResponse = await fetch(`${layerUrl}?f=json`);
+            
+            if (layerResponse.ok) {
+                const layerData = await layerResponse.json();
+                console.log('Service data:', layerData);
+                
+                if (layerData.layers) {
+                    layers.push(...layerData.layers.map(l => ({
+                        ...l,
+                        parentLayerId: layer.id,
+                        parentLayerName: layer.title,
+                        parentPath: currentPath,
+                        serviceUrl: layerUrl
+                    })));
+                } else if (layerData.type === 'ImageServer') {
+                    layers.push({
+                        id: layer.id,
+                        name: layer.title,
+                        type: 'Imagery Layer',
+                        serviceUrl: layerUrl,
+                        parentLayerId: layer.id,
+                        parentLayerName: layer.title,
+                        parentPath: currentPath
+                    });
+                } else {
+                    layers.push({
+                        ...layerData,
+                        parentLayerId: layer.id,
+                        parentLayerName: layer.title,
+                        parentPath: currentPath,
+                        serviceUrl: layerUrl
+                    });
+                }
+            }
+        } else if (layer.itemId) {
+            console.log('Found item reference:', layer.itemId);
+            
+            const itemUrl = `https://www.arcgis.com/sharing/rest/content/items/${layer.itemId}?f=json`;
+            const itemResponse = await fetch(itemUrl);
+            
+            if (itemResponse.ok) {
+                const itemData = await itemResponse.json();
+                console.log('Item data:', itemData);
+                
+                if (itemData.url) {
+                    const serviceUrl = itemData.url;
+                    const serviceResponse = await fetch(`${serviceUrl}?f=json`);
+                    
+                    if (serviceResponse.ok) {
+                        const serviceData = await serviceResponse.json();
+                        console.log('Service data:', serviceData);
+                        
+                        if (serviceData.layers) {
+                            layers.push(...serviceData.layers.map(l => ({
+                                ...l,
+                                parentLayerId: layer.id,
+                                parentLayerName: layer.title,
+                                parentPath: currentPath,
+                                serviceUrl: serviceUrl
+                            })));
+                        } else if (serviceData.type === 'ImageServer') {
+                            layers.push({
+                                id: layer.id,
+                                name: layer.title,
+                                type: 'Imagery Layer',
+                                serviceUrl: serviceUrl,
+                                parentLayerId: layer.id,
+                                parentLayerName: layer.title,
+                                parentPath: currentPath
+                            });
+                        } else {
+                            layers.push({
+                                ...serviceData,
+                                parentLayerId: layer.id,
+                                parentLayerName: layer.title,
+                                parentPath: currentPath,
+                                serviceUrl: serviceUrl
+                            });
+                        }
+                    }
+                }
+            }
+        } else if (layer.featureCollection) {
+            console.log('Found Feature Collection:', layer.featureCollection);
+            
+            if (layer.featureCollection.layers) {
+                layers.push(...layer.featureCollection.layers.map(l => ({
+                    ...l,
+                    id: `${layer.id}_${l.id}`,
+                    name: layer.title,
+                    type: 'Feature Layer',
+                    parentLayerId: layer.id,
+                    parentLayerName: layer.title,
+                    parentPath: currentPath
+                })));
+            } else {
+                layers.push({
+                    id: layer.id,
+                    name: layer.title,
+                    type: 'Feature Layer',
+                    geometryType: layer.featureCollection.layers?.[0]?.geometryType,
+                    parentLayerId: layer.id,
+                    parentLayerName: layer.title,
+                    parentPath: currentPath
+                });
+            }
+        } else if (layer.layerType === 'ArcGISFeatureLayer') {
+            layers.push({
+                id: layer.id,
+                name: layer.title,
+                type: 'Feature Layer',
+                parentLayerId: layer.id,
+                parentLayerName: layer.title,
+                parentPath: currentPath,
+                serviceUrl: layer.url
+            });
+        }
+    }
+
+    groupLayers(layers) {
+        this.layerGroups.clear();
+        
+        const groups = {
+            feature: { name: 'Feature Layers', layers: [] },
+            tiled: { name: 'Tiled Layers', layers: [] },
+            imagery: { name: 'Imagery Layers', layers: [] },
+            other: { name: 'Other Layers', layers: [] }
+        };
+
+        layers.forEach(layer => {
+            const type = this.getLayerType(layer);
+            if (groups[type]) {
+                groups[type].layers.push(layer);
+            } else {
+                groups.other.layers.push(layer);
+            }
+        });
+
+        Object.entries(groups).forEach(([type, group]) => {
+            if (group.layers.length > 0) {
+                this.layerGroups.set(type, group);
+            }
+        });
+    }
+
+    getLayerType(layer) {
+        if (layer.type === 'Feature Layer' || layer.type === 'Feature Collection') return 'feature';
+        if (layer.type === 'Tiled Layer') return 'tiled';
+        if (layer.type === 'Imagery Layer' || layer.type === 'ImageServer') return 'imagery';
+        return 'other';
+    }
+
+    showLayerSelectionModal() {
+        this.layerSelectionList.innerHTML = '';
+        
+        this.layerGroups.forEach((group, type) => {
+            const groupElement = document.createElement('div');
+            groupElement.className = 'layer-group';
+            groupElement.innerHTML = `
+                <div class="layer-group-header">
+                    <h4>${group.name}</h4>
+                    <span class="group-count">${group.layers.length} layers</span>
+                </div>
+                <div class="layer-group-content">
+                    ${group.layers.map(layer => this.createLayerOption(layer, type)).join('')}
+                </div>
+            `;
+
+            const header = groupElement.querySelector('.layer-group-header');
+            const content = groupElement.querySelector('.layer-group-content');
+            header.addEventListener('click', () => {
+                content.classList.toggle('expanded');
+            });
+
+            this.layerSelectionList.appendChild(groupElement);
+        });
+
+        this.layerSelectionModal.style.display = 'block';
+        this.updateLayerCount();
+    }
+
+    createLayerOption(layer, type) {
+        const parentInfo = layer.parentPath ? 
+            `<span class="layer-parent">${layer.parentPath.join(' > ')}</span>` : '';
+        
+        return `
+            <div class="layer-option" data-type="${type}">
+                <label>
+                    <input type="checkbox" value="${layer.id}" 
+                           data-layer-name="${layer.name}" 
+                           data-parent-id="${layer.parentLayerId || ''}" 
+                           data-service-url="${layer.serviceUrl || ''}">
+                    <span class="layer-icon ${type}">${this.getLayerIcon(type)}</span>
+                    <span class="layer-name">${layer.name}</span>
+                    ${parentInfo}
+                    <span class="layer-type">${layer.type} - ${layer.geometryType || 'N/A'}</span>
+                </label>
+                <div class="layer-tooltip">
+                    <p><strong>ID:</strong> ${layer.id}</p>
+                    <p><strong>Type:</strong> ${layer.type}</p>
+                    ${layer.geometryType ? `<p><strong>Geometry:</strong> ${layer.geometryType}</p>` : ''}
+                    ${layer.description ? `<p><strong>Description:</strong> ${layer.description}</p>` : ''}
+                    ${layer.parentPath ? `<p><strong>Path:</strong> ${layer.parentPath.join(' > ')}</p>` : ''}
+                    ${layer.serviceUrl ? `<p><strong>Service URL:</strong> ${layer.serviceUrl}</p>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    getLayerIcon(type) {
+        const icons = {
+            feature: '<svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>',
+            tiled: '<svg viewBox="0 0 24 24"><path d="M3 3h8v8H3zm10 0h8v8h-8zM3 13h8v8H3zm10 0h8v8h-8z"/></svg>',
+            imagery: '<svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>',
+            other: '<svg viewBox="0 0 24 24"><path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z"/></svg>'
+        };
+        return icons[type] || icons.other;
+    }
+
+    filterLayers() {
+        const searchTerm = this.layerSearch.value.toLowerCase();
+        const selectedTypes = Array.from(this.layerTypeFilters)
+            .filter(filter => filter.checked)
+            .map(filter => filter.value);
+
+        const layerOptions = this.layerSelectionList.querySelectorAll('.layer-option');
+        layerOptions.forEach(option => {
+            const type = option.dataset.type;
+            const name = option.querySelector('.layer-name').textContent.toLowerCase();
+            const typeMatch = selectedTypes.includes(type);
+            const searchMatch = name.includes(searchTerm);
+            option.style.display = typeMatch && searchMatch ? 'block' : 'none';
+        });
+
+        this.updateLayerCount();
+    }
+
+    updateLayerCount() {
+        const visibleLayers = this.layerSelectionList.querySelectorAll('.layer-option[style="display: block"]').length;
+        const selectedLayers = this.layerSelectionList.querySelectorAll('input[type="checkbox"]:checked').length;
+        this.layerCount.textContent = `${selectedLayers} of ${visibleLayers} layers selected`;
+    }
+
     async handleFeatureServerUrl(url) {
-        // Fetch Feature Server metadata
         const metadataUrl = new URL(url);
         metadataUrl.searchParams.append('f', 'json');
         const response = await fetch(metadataUrl.toString());
@@ -231,23 +579,19 @@ class ArcGISConverterApp {
             throw new Error(`Feature Server Error: ${metadata.error.message}`);
         }
 
-        // Store Feature Server info
         this.currentFeatureServer = {
             url: url,
             name: metadata.name || 'Unnamed Feature Server',
             layers: metadata.layers || []
         };
 
-        // Show layer selection modal
         this.showLayerSelectionModal();
     }
 
     async handleSingleLayerUrl(url) {
-        // Extract layer ID from URL
         const layerId = url.split('/').pop();
         const featureServerUrl = url.substring(0, url.lastIndexOf('/'));
         
-        // Fetch layer metadata
         const metadataUrl = new URL(`${featureServerUrl}/${layerId}`);
         metadataUrl.searchParams.append('f', 'json');
         const response = await fetch(metadataUrl.toString());
@@ -261,30 +605,7 @@ class ArcGISConverterApp {
             throw new Error(`Layer Error: ${metadata.error.message}`);
         }
 
-        // Add the single layer
         await this.addLayer(featureServerUrl, layerId, metadata);
-    }
-
-    showLayerSelectionModal() {
-        // Clear previous layer options
-        this.layerSelectionList.innerHTML = '';
-        
-        // Add layer options
-        this.currentFeatureServer.layers.forEach(layer => {
-            const layerOption = document.createElement('div');
-            layerOption.className = 'layer-option';
-            layerOption.innerHTML = `
-                <label>
-                    <input type="checkbox" value="${layer.id}" data-layer-name="${layer.name}">
-                    <span class="layer-name">${layer.name}</span>
-                    <span class="layer-type">${layer.type} - ${layer.geometryType || 'N/A'}</span>
-                </label>
-            `;
-            this.layerSelectionList.appendChild(layerOption);
-        });
-
-        // Show modal
-        this.layerSelectionModal.style.display = 'block';
     }
 
     closeLayerSelectionModal() {
@@ -312,9 +633,14 @@ class ArcGISConverterApp {
             for (const layer of selectedLayers) {
                 const layerId = layer.value;
                 const layerName = layer.dataset.layerName;
+                const serviceUrl = layer.dataset.serviceUrl;
                 
-                // Fetch layer metadata
-                const metadataUrl = new URL(`${this.currentFeatureServer.url}/${layerId}`);
+                if (!serviceUrl) {
+                    console.warn(`Skipping layer ${layerName} - no service URL found`);
+                    continue;
+                }
+
+                const metadataUrl = new URL(serviceUrl);
                 metadataUrl.searchParams.append('f', 'json');
                 const response = await fetch(metadataUrl.toString());
                 
@@ -327,63 +653,67 @@ class ArcGISConverterApp {
                     throw new Error(`Layer ${layerName} Error: ${metadata.error.message}`);
                 }
 
-                // Add the layer
-                await this.addLayer(this.currentFeatureServer.url, layerId, metadata);
+                await this.addLayer(serviceUrl, layerId, metadata);
             }
 
             this.closeLayerSelectionModal();
             this.setStatus(`Successfully added ${selectedLayers.length} layer(s).`, 'success');
         } catch (error) {
             this.setStatus(`Error adding layers: ${error.message}`, 'error');
+            console.error('Error details:', error);
         } finally {
             this.setLoading(false);
         }
     }
 
     async addLayer(featureServerUrl, layerId, metadata) {
-        // Fetch features
-        const queryUrl = new URL(`${featureServerUrl}/${layerId}/query`);
-        queryUrl.searchParams.append('f', 'json');
-        queryUrl.searchParams.append('where', '1=1');
-        queryUrl.searchParams.append('outFields', '*');
-        queryUrl.searchParams.append('returnGeometry', 'true');
-        queryUrl.searchParams.append('outSR', '4326');
+        try {
+            const baseUrl = featureServerUrl.split('/FeatureServer')[0] + '/FeatureServer';
+            const queryUrl = new URL(`${baseUrl}/${layerId}/query`);
+            
+            queryUrl.searchParams.append('f', 'json');
+            queryUrl.searchParams.append('where', '1=1');
+            queryUrl.searchParams.append('outFields', '*');
+            queryUrl.searchParams.append('returnGeometry', 'true');
+            queryUrl.searchParams.append('outSR', '4326');
 
-        const featuresResponse = await fetch(queryUrl.toString());
-        if (!featuresResponse.ok) {
-            throw new Error(`Feature fetch failed: ${featuresResponse.statusText}`);
+            console.log('Fetching features from:', queryUrl.toString());
+            const featuresResponse = await fetch(queryUrl.toString());
+            
+            if (!featuresResponse.ok) {
+                throw new Error(`Feature fetch failed: ${featuresResponse.statusText}`);
+            }
+
+            const featuresData = await featuresResponse.json();
+            if (featuresData.error) {
+                throw new Error(`Feature Query Error: ${featuresData.error.message}`);
+            }
+
+            if (!featuresData.features || !Array.isArray(featuresData.features)) {
+                throw new Error('No features found or invalid feature data format.');
+            }
+
+            const layerUrl = `${baseUrl}/${layerId}`;
+            this.layerMetadata.set(layerUrl, metadata);
+            this.layerFeatures.set(layerUrl, featuresData.features);
+            this.drawingInfo.set(layerUrl, metadata.drawingInfo);
+
+            const vectorSource = new ol.source.Vector();
+            const vectorLayer = new ol.layer.Vector({
+                source: vectorSource,
+                title: metadata.name || 'Unnamed Layer'
+            });
+            this.vectorLayers.set(layerUrl, vectorLayer);
+            this.map.addLayer(vectorLayer);
+
+            this.addLayerToList(layerUrl, metadata);
+
+            this.displayFeaturesOnMap(layerUrl);
+            this.showExportOptions();
+        } catch (error) {
+            console.error('Error in addLayer:', error);
+            throw error;
         }
-
-        const featuresData = await featuresResponse.json();
-        if (featuresData.error) {
-            throw new Error(`Feature Query Error: ${featuresData.error.message}`);
-        }
-
-        if (!featuresData.features || !Array.isArray(featuresData.features)) {
-            throw new Error('No features found or invalid feature data format.');
-        }
-
-        // Store layer data
-        const layerUrl = `${featureServerUrl}/${layerId}`;
-        this.layerMetadata.set(layerUrl, metadata);
-        this.layerFeatures.set(layerUrl, featuresData.features);
-        this.drawingInfo.set(layerUrl, metadata.drawingInfo);
-
-        // Create vector layer
-        const vectorSource = new ol.source.Vector();
-        const vectorLayer = new ol.layer.Vector({
-            source: vectorSource,
-            title: metadata.name || 'Unnamed Layer'
-        });
-        this.vectorLayers.set(layerUrl, vectorLayer);
-        this.map.addLayer(vectorLayer);
-
-        // Add layer to list
-        this.addLayerToList(layerUrl, metadata);
-
-        // Display features
-        this.displayFeaturesOnMap(layerUrl);
-        this.showExportOptions();
     }
 
     addLayerToList(layerId, metadata) {
@@ -405,26 +735,21 @@ class ArcGISConverterApp {
     }
 
     removeLayer(layerId) {
-        // Remove from map
         const vectorLayer = this.vectorLayers.get(layerId);
         if (vectorLayer) {
             this.map.removeLayer(vectorLayer);
             this.vectorLayers.delete(layerId);
         }
 
-        // Remove from data storage
         this.layerMetadata.delete(layerId);
         this.layerFeatures.delete(layerId);
         this.drawingInfo.delete(layerId);
 
-        // Remove from UI
         const layerItem = this.layerList.querySelector(`[data-layer-id="${layerId}"]`).parentElement;
         layerItem.remove();
 
-        // Update export button state
         this.exportBtn.disabled = this.vectorLayers.size === 0;
 
-        // Hide export options if no layers
         if (this.vectorLayers.size === 0) {
             this.hideExportOptions();
         }
@@ -443,7 +768,6 @@ class ArcGISConverterApp {
         const vectorSource = vectorLayer.getSource();
         vectorSource.clear();
 
-        // Create style cache for symbols
         const styleCache = {};
 
         const olFeatures = features.map(feature => {
@@ -455,14 +779,12 @@ class ArcGISConverterApp {
                         ...feature.attributes
                     });
                 } else if (feature.geometry.paths) {
-                    // Handle LineString
                     const coordinates = feature.geometry.paths[0].map(coord => ol.proj.fromLonLat(coord));
                     geometry = new ol.Feature({
                         geometry: new ol.geom.LineString(coordinates),
                         ...feature.attributes
                     });
                 } else if (feature.geometry.rings) {
-                    // Handle Polygon
                     const coordinates = feature.geometry.rings.map(ring => 
                         ring.map(coord => ol.proj.fromLonLat(coord))
                     );
@@ -472,16 +794,13 @@ class ArcGISConverterApp {
                     });
                 }
 
-                // Apply custom style if drawingInfo exists
                 if (geometry && this.drawingInfo.get(layerId) && this.drawingInfo.get(layerId).renderer) {
                     const renderer = this.drawingInfo.get(layerId).renderer;
                     
-                    // Handle unique value renderer
                     if (renderer.type === 'uniqueValue') {
                         const field = renderer.field1;
                         const value = feature.attributes[field];
                         
-                        // Find matching symbol
                         let symbol = renderer.defaultSymbol;
                         if (renderer.uniqueValueGroups) {
                             for (const group of renderer.uniqueValueGroups) {
@@ -494,7 +813,6 @@ class ArcGISConverterApp {
                             }
                         }
 
-                        // Create style from symbol
                         if (symbol && symbol.type === 'esriPMS') {
                             const key = symbol.url || symbol.imageData;
                             if (!styleCache[key]) {
@@ -503,7 +821,6 @@ class ArcGISConverterApp {
                                     `data:${symbol.contentType};base64,${symbol.imageData}` : 
                                     symbol.url;
                                 
-                                // Create a canvas to resize the image
                                 const canvas = document.createElement('canvas');
                                 const ctx = canvas.getContext('2d');
                                 canvas.width = symbol.width || 30;
@@ -534,7 +851,6 @@ class ArcGISConverterApp {
 
         vectorSource.addFeatures(olFeatures);
 
-        // Fit map to features
         if (olFeatures.length > 0) {
             const extent = vectorSource.getExtent();
             this.map.getView().fit(extent, {

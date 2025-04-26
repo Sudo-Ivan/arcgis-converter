@@ -46,13 +46,27 @@
                         <button class="close-modal">&times;</button>
                     </div>
                     <div class="modal-body">
+                        <div class="layer-selection-controls">
+                            <div class="search-box">
+                                <input type="text" id="layerSearch" placeholder="Search layers...">
+                            </div>
+                            <div class="layer-type-filters">
+                                <label><input type="checkbox" value="feature" checked> Feature Layers</label>
+                                <label><input type="checkbox" value="tiled" checked> Tiled Layers</label>
+                                <label><input type="checkbox" value="imagery" checked> Imagery Layers</label>
+                            </div>
+                        </div>
                         <div id="layerSelectionList" class="layer-selection-list">
+                            <!-- Layer groups will be added here dynamically -->
                         </div>
                     </div>
                     <div class="modal-footer">
-                        <button id="selectAllLayers" class="secondary-button">Select All</button>
-                        <button id="deselectAllLayers" class="secondary-button">Deselect All</button>
-                        <button id="addSelectedLayers" class="primary-button">Add Selected Layers</button>
+                        <div class="layer-count"></div>
+                        <div class="button-group">
+                            <button id="selectAllLayers" class="secondary-button">Select All</button>
+                            <button id="deselectAllLayers" class="secondary-button">Deselect All</button>
+                            <button id="addSelectedLayers" class="primary-button">Add Selected Layers</button>
+                        </div>
                     </div>
                 </div>
             </div>
