@@ -1,5 +1,7 @@
 # ArcGIS Layer Converter
 
+[![DeepSource](https://app.deepsource.com/gh/Sudo-Ivan/arcgis-converter.svg/?label=active+issues&show_trend=true&token=Sw-SJOLfvc48IxW-xmZYcdu2)](https://app.deepsource.com/gh/Sudo-Ivan/arcgis-converter/)
+
 A web application for converting ArcGIS public layers to various formats for offline use in applications like ATAK, QGIS, and other GIS programs.
 
 > [!NOTE]  
