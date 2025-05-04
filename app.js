@@ -1,8 +1,13 @@
 document.addEventListener('DOMContentLoaded', () => {
+    if (typeof ol === 'undefined') {
+        console.error('OpenLayers library not loaded. Please check if ol.js is properly included.');
+        return;
+    }
     const app = new ArcGISConverterApp();
     app.init();
 });
 
+/* global ol */
 class ArcGISConverterApp {
     constructor() {
         this.layerUrlInput = document.getElementById('layerUrl');
