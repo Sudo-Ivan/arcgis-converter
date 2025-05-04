@@ -5,6 +5,4 @@ services:
     image: ghcr.io/sudo-ivan/arcgis-converter:latest
     ports:
       - "8000:80"
-    volumes:
-      - .:/usr/share/nginx/html
     restart: unless-stopped 
